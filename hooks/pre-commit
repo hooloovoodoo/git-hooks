@@ -1,0 +1,36 @@
+#!/bin/bash
+#
+# Require @hooloovoo email for commits within hooloovoodoo organization.
+
+valid_domain="hooloovoo.rs"
+organization="hooloovoodoo"
+
+# retrieve git config
+email=$(git config user.email)
+remote_url=$(git config --get remote.origin.url)
+
+# extract repo name and owner
+repo_name=$(basename -s .git "$remote_url")
+if [[ $remote_url == git@* ]]; then
+  owner="$(echo "${remote_url}" | awk -F '[:/]' '{print $2}')"
+else
+  owner=$(echo "${remote_url}" | awk -F '/' '{print $4}')
+fi
+
+bold=$(tput bold)
+normal=$(tput sgr0)
+
+# if repo remote is within hooloovoodoo, check commit email
+if [[ "${owner}" == "${organization}" ]]; then
+  if [[ ! "${email}" == *"$valid_domain" ]]; then
+  echo "${bold}ERROR${normal}: Commit email must be *${bold}@${valid_domain}${normal}"
+  echo "  ${bold}FIX${normal}: Configure per-repo (${bold}${repo_name}${normal}):"
+  echo "  $ git config user.email 'matori@hooloovoo.rs'"
+  echo "  ... or globally:"
+  echo "  $ git config --global user.email 'matori@hooloovoo.rs'"
+  exit 1
+  fi
+fi
+
+exit 0
+
