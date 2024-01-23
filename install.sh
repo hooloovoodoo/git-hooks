@@ -39,7 +39,7 @@ if [ ! -f "${LOCAL_HOOKS_VERSION_FILE}" ] || [ "${LATEST_VERSION}" != "$(cat "${
   curl -sL "${REPO_URL}/archive/refs/tags/${LATEST_VERSION}.zip" -o "${HOOKS_DIR}/hooks.zip"
   unzip -o "${HOOKS_DIR}/hooks.zip" -d "${HOOKS_DIR}"
   mv "${HOOKS_DIR}"/git-hooks-*/hooks/* "${HOOKS_DIR}"
-  rm "${HOOKS_DIR}"/hooks.zip "${HOOKS_DIR}"/git-hooks-*/{README.md,install.sh}
+  for f in "${HOOKS_DIR}"/hooks.zip "${HOOKS_DIR}"/git-hooks-*/{README.md,install.sh}; do rm "${f}"; done
   rmdir "${HOOKS_DIR}"/git-hooks-*/hooks "${HOOKS_DIR}"/git-hooks-*
   echo "${LATEST_VERSION}" > "${LOCAL_HOOKS_VERSION_FILE}"
   echo "Git hooks updated to version ${LATEST_VERSION}."
