@@ -2,6 +2,8 @@
 #
 # Ensure commit message adhere to Jira automation format.
 
+set -e
+
 # regex pattern for jira ticket (e.g., FLC-22)
 JIRA_TICKET_AUTOMATION_REGEX='^[A-Z]{3,4}-[0-9]+ #comment'
 

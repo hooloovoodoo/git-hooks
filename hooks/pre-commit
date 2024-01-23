@@ -2,6 +2,8 @@
 #
 # Require @hooloovoo email for commits within hooloovoodoo organization.
 
+set -e
+
 valid_domain="hooloovoo.rs"
 organization="hooloovoodoo"
 
