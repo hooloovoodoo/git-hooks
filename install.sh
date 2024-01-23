@@ -5,14 +5,12 @@
 REPO_NAME="hooloovoodoo/git-hooks"
 REPO_URL="https://github.com/${REPO_NAME}"
 API_URL="https://api.github.com/repos/${REPO_NAME}/releases/latest"
-TEMPLATE_DIR="${HOME}/.git_template"
-HOOKS_DIR="${TEMPLATE_DIR}/hooks"
+HOOKS_DIR="${HOME}/.git-hooks"
 LOCAL_HOOKS_VERSION_FILE="${HOOKS_DIR}/version"
 
 # ensure git and jq are installed
 for cmd in git jq unzip; do
   if ! command -v ${cmd} &> /dev/null; then
-    echo "DEBUG :: Command ${cmd} missing."
     if [[ "$OSTYPE" == "darwin"* ]]; then
       brew install ${cmd}
     elif [[ -f /etc/debian_version ]]; then
@@ -24,16 +22,13 @@ for cmd in git jq unzip; do
   fi
 done
 
-# ebsure git init.templatedir is set
-GIT_TEMPLATE_DIR=$(git config --global init.templatedir)
-if [ -z "$GIT_TEMPLATE_DIR" ]; then
+# ensure git core.hooksPath is set and hooks dir exists
+GIT_HOOKS_DIR=$(git config --global core.hooksPath)
+if [ -z "$GIT_HOOKS_DIR" ]; then
   echo "Setting global Git template directory..."
-  git config --global init.templatedir "${TEMPLATE_DIR}"
   git config --global core.hooksPath "${HOOKS_DIR}"
 fi
-
-# ensure git hooks dir exists
-mkdir -p "${TEMPLATE_DIR}" "${HOOKS_DIR}"
+mkdir -p "${HOOKS_DIR}"
 
 # get the latest release version
 LATEST_VERSION=$(curl -s "$API_URL" | jq -r '.tag_name')
