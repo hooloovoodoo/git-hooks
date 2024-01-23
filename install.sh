@@ -33,7 +33,7 @@ if [ -z "$GIT_TEMPLATE_DIR" ]; then
 fi
 
 # ensure git hooks dir exists
-mkdir -p "$HOOKS_DIR"
+mkdir -p "${TEMPLATE_DIR}" "${HOOKS_DIR}"
 
 # get the latest release version
 LATEST_VERSION=$(curl -s "$API_URL" | jq -r '.tag_name')
