@@ -27,8 +27,9 @@ done
 # ebsure git init.templatedir is set
 GIT_TEMPLATE_DIR=$(git config --global init.templatedir)
 if [ -z "$GIT_TEMPLATE_DIR" ]; then
-    echo "Setting global Git template directory..."
-    git config --global init.templatedir "${TEMPLATE_DIR}"
+  echo "Setting global Git template directory..."
+  git config --global init.templatedir "${TEMPLATE_DIR}"
+  git config --global core.hooksPath "${HOOKS_DIR}"
 fi
 
 # ensure git hooks dir exists
