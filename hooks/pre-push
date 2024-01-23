@@ -2,6 +2,8 @@
 #
 # Require branch name having a pre-defined prefix.
 
+set -e
+
 organization="hooloovoodoo"
 valid_prefixes=("feature" "bugfix" "release")
 
