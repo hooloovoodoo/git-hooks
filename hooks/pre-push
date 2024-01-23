@@ -22,7 +22,7 @@ normal=$(tput sgr0)
 if [[ "${owner}" == "${organization}" ]]; then
 
   # check each commit
-  while read local_ref local_sha remote_ref remote_sha; do
+  while read -r local_ref; do
     branch_name=$(echo "${local_ref}" | awk -F 'heads/' '{print $NF}')
     for prefix in "${valid_prefixes[@]}"; do
       if [[ "$branch_name" == "$prefix"* ]]; then
