@@ -4,7 +4,7 @@
 
 set -e
 
-if [ -z "$TERM" ]; then
+if [ -z "$TERM" ] || [ "$TERM" = "dumb" ]; then
     export TERM="ansi"
 fi
 
