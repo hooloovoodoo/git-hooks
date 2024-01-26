@@ -4,6 +4,10 @@
 
 set -e
 
+if [ -z "$TERM" ]; then
+    export TERM="ansi"
+fi
+
 valid_domain="hooloovoo.rs"
 organization="hooloovoodoo"
 
