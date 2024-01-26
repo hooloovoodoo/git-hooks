@@ -4,6 +4,10 @@
 
 set -e
 
+if [ -z "$TERM" ]; then
+    export TERM="ansi"
+fi
+
 organization="hooloovoodoo"
 valid_prefixes=("feature" "bugfix" "release")
 
