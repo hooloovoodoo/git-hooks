@@ -1,29 +1,5 @@
 #!/bin/bash
-#
-# Ensure commit message adhere to Jira automation format.
 
-set -e
-
-if [ -z "$TERM" ] || [ "$TERM" = "dumb" ]; then
-    export TERM="ansi"
-fi
-
-# regex pattern for jira ticket (e.g., FLC-22)
-JIRA_TICKET_AUTOMATION_REGEX='^[A-Z]{3,4}-[0-9]+ #comment'
-
-# retrieve commit message
-COMMIT_MSG_FILE="$1"
-commit_msg=$(cat "$COMMIT_MSG_FILE")
-
-bold=$(tput bold)
-normal=$(tput sgr0)
-
-# check if the message is formatted correctly
-if [[ ! $commit_msg =~ $JIRA_TICKET_AUTOMATION_REGEX ]]; then
-    echo "${bold}ERROR${normal}: Commit message does not start with a JIRA ticket and a literal '#comment'."
-    echo "  ${bold}FIX${normal}: Please follow the format: <JIRA-TICKET> #comment <message>"
-    exit 1
-fi
+# do nothing, keeping the file to make sure previous version is overwritten with empty content on install
 
 exit 0
-
