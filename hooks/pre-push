@@ -1,47 +1,39 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
-# Require branch name having a pre-defined prefix.
+# On hooloovoodoo repos, require branch names to start with an approved prefix.
+# (main/master are intentionally not approved — open a PR from a prefixed branch.)
 
-set -e
+set -uo pipefail
 
-if [ -z "$TERM" ] || [ "$TERM" = "dumb" ]; then
-    export TERM="ansi"
-fi
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib.sh
+. "$DIR/lib.sh"
 
-organization="hooloovoodoo"
-valid_prefixes=("feature" "bugfix" "release")
+is_org_repo || exit 0
 
-# retrieve git config
-remote_url=$(git config --get remote.origin.url)
+VALID_PREFIXES=(feature bugfix release hotfix docs chore)
+ZERO="0000000000000000000000000000000000000000"
 
-# extract repo owner
-if [[ $remote_url == git@* ]]; then
-  owner="$(echo "${remote_url}" | awk -F '[:/]' '{print $2}')"
-else
-  owner=$(echo "${remote_url}" | awk -F '/' '{print $4}')
-fi
-
-bold=$(tput bold)
-normal=$(tput sgr0)
-
-# if repo remote is within hooloovoodoo, check branch name
-if [[ "${owner}" == "${organization}" ]]; then
-
-  # check each commit
-  while read -r local_ref; do
-    branch_name=$(echo "${local_ref}" | awk -F 'heads/' '{print $NF}')
-    for prefix in "${valid_prefixes[@]}"; do
-      if [[ "$branch_name" == "$prefix"* ]]; then
-        exit 0
-      fi
-    done
-
-    echo "${bold}ERROR${normal} |"
-    echo "${bold}ERROR${normal} | Branch name must start with one of the prefixes: ${bold}${valid_prefixes[*]}${normal}"
-    echo "${bold}ERROR${normal} |"
-    exit 1
+bad=""
+# git feeds one line per ref on stdin: <local_ref> <local_sha> <remote_ref> <remote_sha>
+while read -r local_ref local_sha _remote_ref _remote_sha; do
+  [ "$local_sha" = "$ZERO" ] && continue          # branch deletion — nothing to check
+  case "$local_ref" in
+    refs/heads/*) branch=${local_ref#refs/heads/} ;;
+    *) continue ;;                                 # tags etc.
+  esac
+  ok=""
+  for p in "${VALID_PREFIXES[@]}"; do
+    case "$branch" in "$p"/*|"$p") ok=1; break ;; esac
   done
+  [ -z "$ok" ] && bad+="  $branch"$'\n'
+done
+
+if [ -n "$bad" ]; then
+  echo "${bold}✗ pre-push${normal}: branch name needs an approved prefix." >&2
+  printf '%s' "$bad" >&2
+  echo "  Allowed: ${VALID_PREFIXES[*]}   e.g.  feature/LET-2949-news-churn" >&2
+  exit 1
 fi
 
 exit 0
-

@@ -22,11 +22,15 @@ for cmd in git jq unzip; do
   fi
 done
 
-# ensure git core.hooksPath is set and hooks dir exists
+# ensure git core.hooksPath points at our hooks dir
 GIT_HOOKS_DIR=$(git config --global core.hooksPath)
 if [ -z "$GIT_HOOKS_DIR" ]; then
-  echo "Setting global Git template directory..."
+  echo "Setting global core.hooksPath -> ${HOOKS_DIR}"
   git config --global core.hooksPath "${HOOKS_DIR}"
+elif [ "$GIT_HOOKS_DIR" != "${HOOKS_DIR}" ]; then
+  echo "[!] global core.hooksPath is '${GIT_HOOKS_DIR}', not '${HOOKS_DIR}'."
+  echo "    HLV hooks will NOT run until you point it here:"
+  echo "    git config --global core.hooksPath '${HOOKS_DIR}'"
 fi
 mkdir -p "${HOOKS_DIR}"
 
@@ -41,9 +45,17 @@ if [ ! -f "${LOCAL_HOOKS_VERSION_FILE}" ] || [ "${LATEST_VERSION}" != "$(cat "${
   mv "${HOOKS_DIR}"/git-hooks-*/hooks/* "${HOOKS_DIR}"
   for f in "${HOOKS_DIR}"/hooks.zip "${HOOKS_DIR}"/git-hooks-*/{README.md,install.sh}; do rm "${f}"; done
   rmdir "${HOOKS_DIR}"/git-hooks-*/hooks "${HOOKS_DIR}"/git-hooks-*
+  chmod +x "${HOOKS_DIR}"/* 2>/dev/null || true   # ensure hooks stay executable
   echo "${LATEST_VERSION}" > "${LOCAL_HOOKS_VERSION_FILE}"
   echo "Git hooks updated to version ${LATEST_VERSION}."
 else
   echo "Hooks be good \o/"
+fi
+
+# doctor: surface the most common reason a commit later gets rejected.
+git_email=$(git config user.email 2>/dev/null || true)
+if [ -n "$git_email" ] && [[ "$git_email" != *@hooloovoo.rs ]]; then
+  echo "[!] your git user.email is '${git_email}', not *@hooloovoo.rs — commits to org repos will be rejected."
+  echo "    Fix: git config --global user.email 'you@hooloovoo.rs'"
 fi
 

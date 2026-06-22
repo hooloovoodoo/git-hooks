@@ -1,42 +1,76 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
-# Require @hooloovoo email for commits within hooloovoodoo organization.
+# On hooloovoodoo repos:
+#   1. require an @hooloovoo.rs commit email;
+#   2. refuse to commit secret/credential files (mirrors the Claude guard denylist).
+#
+# Escape hatch for a deliberate exception: git commit --no-verify
 
-set -e
+set -uo pipefail
 
-if [ -z "$TERM" ] || [ "$TERM" = "dumb" ]; then
-    export TERM="ansi"
-fi
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib.sh
+. "$DIR/lib.sh"
 
-valid_domain="hooloovoo.rs"
-organization="hooloovoodoo"
+VALID_DOMAIN="hooloovoo.rs"
 
-# retrieve git config
-email=$(git config user.email)
-remote_url=$(git config --get remote.origin.url)
-
-# extract repo name and owner
-repo_name=$(basename -s .git "$remote_url")
-if [[ $remote_url == git@* ]]; then
-  owner="$(echo "${remote_url}" | awk -F '[:/]' '{print $2}')"
-else
-  owner=$(echo "${remote_url}" | awk -F '/' '{print $4}')
-fi
-
-bold=$(tput bold)
-normal=$(tput sgr0)
-
-# if repo remote is within hooloovoodoo, check commit email
-if [[ "${owner}" == "${organization}" ]]; then
-  if [[ ! "${email}" == *"$valid_domain" ]]; then
-  echo "${bold}ERROR${normal}: Commit email must be *${bold}@${valid_domain}${normal}"
-  echo "  ${bold}FIX${normal}: Configure per-repo (${bold}${repo_name}${normal}):"
-  echo "  $ git config user.email 'matori@hooloovoo.rs'"
-  echo "  ... or globally:"
-  echo "  $ git config --global user.email 'matori@hooloovoo.rs'"
-  exit 1
+# --- 1. commit email (org repos only) --------------------------------------
+if is_org_repo; then
+  email=$(git config user.email 2>/dev/null || true)
+  if [[ "$email" != *@"$VALID_DOMAIN" ]]; then
+    echo "${bold}✗ pre-commit${normal}: commit email must be *@${VALID_DOMAIN} (got: '${email:-unset}')." >&2
+    echo "  Fix this repo:   git config user.email 'you@${VALID_DOMAIN}'" >&2
+    echo "  ... or globally: git config --global user.email 'you@${VALID_DOMAIN}'" >&2
+    exit 1
   fi
 fi
 
-exit 0
+# --- 2. secret/credential files --------------------------------------------
+# Keep this denylist in sync with falcon-cc-suite guard-files.sh / guard-bash.sh.
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+blocked=""
+while IFS= read -r f; do
+  [ -z "$f" ] && continue
+  base=$(basename "$f")
+  case "$base" in
+    .pgpass|.s3cfg|.pg_service.conf|ops.env|.netrc|credentials|id_rsa|id_dsa|id_ecdsa|id_ed25519)
+      blocked+="  $f  (credential file)"$'\n'; continue ;;
+  esac
+  # .env in any form (.env, .env.<x>, <name>.env) but allow example/sample/template/dist.
+  if printf '%s' "$base" | grep -Eq '(\.env$|^\.env\.)' \
+     && ! printf '%s' "$base" | grep -Eq '\.(example|sample|template|dist)$'; then
+    blocked+="  $f  (.env / secrets)"$'\n'; continue
+  fi
+  case "$f" in
+    *.pem|*.key|*/.aws/*|*/.ssh/*|*/.gnupg/*|*/.config/falcon/ops.env)
+      blocked+="  $f  (key/secret path)"$'\n'; continue ;;
+  esac
+done <<< "$staged"
 
+# Near-zero-false-positive content scan of added lines: private-key blocks, AWS keys.
+content_hits=$(git diff --cached --no-color \
+  | grep -E '^\+' \
+  | grep -Eo '(BEGIN [A-Z ]*PRIVATE KEY|AKIA[0-9A-Z]{16})' | sort -u || true)
+
+if [ -n "$blocked" ] || [ -n "${content_hits:-}" ]; then
+  echo "${bold}✗ pre-commit${normal}: refusing to commit secrets." >&2
+  [ -n "$blocked" ] && { echo "  Files:" >&2; printf '%s' "$blocked" >&2; }
+  if [ -n "${content_hits:-}" ]; then
+    echo "  Secret-like content in the staged diff:" >&2
+    printf '%s\n' "$content_hits" | sed 's/^/    /' >&2
+  fi
+  echo "  → Unstage them and add to .gitignore. Deliberate exception: git commit --no-verify" >&2
+  exit 1
+fi
+
+# --- 3. delegate to repo-local checks --------------------------------------
+# Org policy above is uniform and lives here (global). Stack-specific checks
+# (ruff/black, spotless, eslint, …) belong with the code they check: a repo can
+# commit an executable .githooks/pre-commit and it runs automatically — no
+# per-clone activation, because the global install already wired core.hooksPath.
+repo_root=$(git rev-parse --show-toplevel 2>/dev/null || true)
+if [ -n "$repo_root" ] && [ -x "$repo_root/.githooks/pre-commit" ]; then
+  exec "$repo_root/.githooks/pre-commit" "$@"
+fi
+
+exit 0
