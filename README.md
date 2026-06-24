@@ -19,8 +19,13 @@ release. Re-run any time to update.
 | Hook | Enforces (org repos only) |
 |---|---|
 | `pre-commit`  | commit email is `*@hooloovoo.rs`; **blocks committing secrets** (`.env`, `.pgpass`, `.s3cfg`, `ops.env`, `*.pem`/`*.key`, ssh/aws keys, private-key/AWS-key content) |
-| `commit-msg`  | subject is `<TICKET> #comment <msg>` (e.g. `LET-2949 #comment …`); `Merge`/`Revert`/`fixup!`/`squash!` exempt |
-| `pre-push`    | branch starts with `feature/ bugfix/ release/ hotfix/ docs/ chore/` |
+| `commit-msg`  | subject is `<TICKET> #comment <msg>` (e.g. `LET-2949 #comment …`); `Merge`/`Revert`/`fixup!`/`squash!` exempt; the `falcon-docs` repo is exempt entirely |
+| `pre-push`    | branch starts with `feature/ bugfix/ release/ hotfix/ docs/ chore/ archive/` |
+
+`archive/` parks work that's worth keeping but not active (kept out of the
+stale-branch sweep). Convention: `archive/<jira>-<branch-name>`
+(e.g. `archive/LET-3072-pricing-plans-poc`) so the Jira carries the context —
+the hook checks only the prefix, the rest is convention.
 
 The secret denylist is intentionally kept in sync with the Falcon Claude Code
 guards (`falcon-cc-suite` `guard-files.sh` / `guard-bash.sh`) so the agent and

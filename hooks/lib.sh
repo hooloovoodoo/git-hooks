@@ -28,5 +28,15 @@ remote_owner() {
   fi
 }
 
+# remote_repo: print the repo segment of origin's URL (last path part, sans .git),
+# empty if no remote. Works for git@, ssh:// and https:// forms.
+remote_repo() {
+  local url
+  url=$(git config --get remote.origin.url 2>/dev/null) || return 0
+  [ -z "$url" ] && return 0
+  url=${url%.git}
+  printf '%s' "${url##*/}"
+}
+
 # is_org_repo: 0 if origin owner == ORG, else 1. Repos outside the org pass through.
 is_org_repo() { [ "$(remote_owner)" = "$ORG" ]; }
