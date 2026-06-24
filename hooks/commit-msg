@@ -10,6 +10,11 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib.sh
 . "$DIR/lib.sh"
 
+# falcon-docs is a docs-only repo — exempt from the ticket/#comment convention.
+if is_org_repo && [ "$(remote_repo)" = "falcon-docs" ]; then
+  exit 0
+fi
+
 # First non-empty, non-comment line is the subject.
 subject=$(grep -vE '^[[:space:]]*#' "$1" | grep -vE '^[[:space:]]*$' | head -n1)
 
