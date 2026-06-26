@@ -61,3 +61,34 @@ Client-side hooks are bypassable (`--no-verify`) and only run if installed. The
 **authoritative** enforcement is server-side: GitHub branch protection + a CI
 check mirroring these same rules. Treat these hooks as fast local feedback that
 catches mistakes before they reach CI — not as the boundary itself.
+
+## CI policy gate (the server-side half)
+
+`.github/workflows/policy-gate.yml` is a **reusable workflow** that re-runs the
+same three rules on every PR — branch-name prefix, `<TICKET> #comment <msg>`
+commit subjects, and the secret-file/secret-content denylist. It reads the PR's
+own commits (`base..head`) and diff, so it sees exactly what the local hooks
+would have seen before a squash/merge. Plain bash, no secrets, `contents: read`
+only. It lives here, next to `hooks/`, so the two halves of the policy never
+drift — change a rule in `hooks/` and change it here in the same PR.
+
+**Add it to a repo** — commit this caller to the repo's default branch as
+`.github/workflows/policy-gate.yml`:
+
+```yaml
+name: Policy gate
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+jobs:
+  policy-gate:                       # keep this job id — the required check is
+    uses: hooloovoodoo/git-hooks/.github/workflows/policy-gate.yml@master
+```
+
+git-hooks is public, so any org repo (private or public) can call it with no
+extra Actions access setup. Then, once a PR has run it once, add the
+**`policy-gate / check`** context to the branch's required status checks
+(Settings → Branches). Require it only *after* the caller is on the default
+branch — a required check that has never reported blocks every PR.
+
+`policy-gate-self.yml` dogfoods the gate on git-hooks' own PRs.

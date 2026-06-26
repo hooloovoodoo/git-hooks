@@ -1,0 +1,15 @@
+# Caller workflow — run the policy gate on PRs against git-hooks itself.
+# Canonical example of a consumer caller; a consumer repo's version is identical
+# except `uses:` points at hooloovoodoo/git-hooks/...@master instead of ./ .
+# Keep the job id `policy-gate` so the required check is "policy-gate / check"
+# in every repo.
+
+name: Policy gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  policy-gate:
+    uses: ./.github/workflows/policy-gate.yml
