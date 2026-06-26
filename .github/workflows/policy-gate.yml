@@ -1,0 +1,150 @@
+# Reusable workflow — server-side policy gate (LET-3080).
+#
+# The authoritative, non-bypassable mirror of the client-side hooks in THIS repo
+# (hooks/commit-msg, hooks/pre-push, hooks/pre-commit). Local hooks are
+# bypassable (--no-verify) and only run if installed; this gate re-checks the
+# same rules on every PR so branch protection can block a violating merge.
+#
+# These rules MUST stay in sync with hooks/. Same repo on purpose: when you
+# change a rule in hooks/, change it here in the same PR.
+#
+# Each repo's caller workflow invokes this via:
+#   uses: hooloovoodoo/git-hooks/.github/workflows/policy-gate.yml@master
+# git-hooks is public, so any org repo (private or public) can call it with no
+# extra Actions access config. No secrets needed — contents:read is enough.
+
+name: Policy gate (reusable)
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: policy-gate-${{ github.repository }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout caller repo (full history for base..head)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Policy checks (commit-msg / branch-name / secret denylist)
+        env:
+          RANGE_BASE: ${{ github.event.pull_request.base.sha }}
+          RANGE_HEAD: ${{ github.event.pull_request.head.sha }}
+          HEAD_BRANCH: ${{ github.head_ref }}
+          REPO_NAME: ${{ github.event.repository.name }}
+        shell: bash
+        run: |
+          set +e            # we manage exit codes ourselves and report ALL violations
+          set -uo pipefail
+
+          fail=0
+          note() { printf '%s\n' "$*"; }
+          err()  { printf '::error::%s\n' "$*"; fail=1; }
+
+          # --- 1. branch name (mirror hooks/pre-push VALID_PREFIXES) --------
+          check_branch() {
+            local b="${1:-}" p ok=""
+            if [ -z "$b" ]; then note "branch: (none) — skipped"; return; fi
+            for p in feature bugfix release hotfix docs chore archive; do
+              case "$b" in "$p"/*|"$p") ok=1; break ;; esac
+            done
+            if [ -n "$ok" ]; then
+              note "✓ branch '$b' has an approved prefix"
+            else
+              err "branch '$b' needs an approved prefix: feature/ bugfix/ release/ hotfix/ docs/ chore/ archive/"
+            fi
+          }
+
+          # --- 2. commit subjects (mirror hooks/commit-msg) -----------------
+          # falcon-doc(s) is the docs-only repo, exempt from the ticket rule —
+          # same as hooks/commit-msg. Both spellings are listed because the live
+          # repo is "falcon-doc" (the hook's "falcon-docs" never matched it).
+          check_commits() {
+            local exempt_repo="${1:-}"
+            case "$exempt_repo" in
+              falcon-doc|falcon-docs) note "commit-msg: '$exempt_repo' is docs-exempt — skipped"; return ;;
+            esac
+            local allow='^(Merge|Revert|fixup!|squash!)'
+            local ticket='^[A-Z]{3,4}-[0-9]+ #comment'
+            local bad=0 s seen=0
+            while IFS= read -r s; do
+              [ -z "$s" ] && continue
+              seen=1
+              if [[ "$s" =~ $allow ]] || [[ "$s" =~ $ticket ]]; then
+                :
+              else
+                err "commit subject must be '<TICKET> #comment <msg>': ${s}"
+                bad=1
+              fi
+            done
+            if [ "$seen" = 0 ]; then note "commit-msg: no non-merge commits in range — skipped"
+            elif [ "$bad" = 0 ]; then note "✓ all commit subjects match '<TICKET> #comment <msg>'"; fi
+          }
+
+          # --- 3a. secret/credential FILES (mirror hooks/pre-commit) --------
+          check_secret_files() {
+            local f base bad=0 seen=0
+            while IFS= read -r f; do
+              [ -z "$f" ] && continue
+              seen=1
+              base=$(basename "$f")
+              case "$base" in
+                .pgpass|.s3cfg|.pg_service.conf|ops.env|.netrc|credentials|id_rsa|id_dsa|id_ecdsa|id_ed25519)
+                  err "secret/credential file: $f"; bad=1; continue ;;
+              esac
+              # .env in any form (.env, .env.<x>, <name>.env) but allow example/sample/template/dist
+              if printf '%s' "$base" | grep -Eq '(\.env$|^\.env\.)' \
+                 && ! printf '%s' "$base" | grep -Eq '\.(example|sample|template|dist)$'; then
+                err ".env / secrets file: $f"; bad=1; continue
+              fi
+              case "$f" in
+                *.pem|*.key|*/.aws/*|*/.ssh/*|*/.gnupg/*|*/.config/falcon/ops.env)
+                  err "key/secret path: $f"; bad=1; continue ;;
+              esac
+            done
+            if [ "$seen" = 0 ]; then note "secret-files: no files in diff — skipped"
+            elif [ "$bad" = 0 ]; then note "✓ no denylisted secret/credential files in the diff"; fi
+          }
+
+          # --- 3b. secret-like CONTENT in added lines (mirror hooks/pre-commit) ---
+          check_secret_content() {
+            local hits
+            hits=$(grep -E '^\+' | grep -Eo '(BEGIN [A-Z ]*PRIVATE KEY|AKIA[0-9A-Z]{16})' | sort -u || true)
+            if [ -n "$hits" ]; then
+              err "secret-like content in the added lines:"
+              printf '%s\n' "$hits" | sed 's/^/    /'
+            else
+              note "✓ no secret-like content (private keys / AWS keys) in added lines"
+            fi
+          }
+
+          # --- runner -------------------------------------------------------
+          # Process substitution (not pipes) so err() mutates $fail in this shell.
+          base="${RANGE_BASE:?missing base sha — caller must trigger on pull_request}"
+          head="${RANGE_HEAD:?missing head sha — caller must trigger on pull_request}"
+          mb=$(git merge-base "$base" "$head" 2>/dev/null || echo "$base")
+          note "== policy gate =="
+          note "range: ${mb}..${head}  branch: ${HEAD_BRANCH:-?}  repo: ${REPO_NAME:-?}"
+          note ""
+          check_branch        "${HEAD_BRANCH:-}"
+          check_commits       "${REPO_NAME:-}" < <(git log --no-merges --format=%s "${mb}..${head}")
+          check_secret_files                   < <(git diff --name-only --diff-filter=ACMR "${mb}..${head}")
+          check_secret_content                 < <(git diff --no-color "${mb}..${head}")
+          note ""
+          if [ "$fail" != 0 ]; then
+            note "✗ policy gate failed. These rules mirror this repo's hooks/;"
+            note "  installing them (see README) catches this locally before CI."
+          else
+            note "✓ policy gate passed."
+          fi
+          exit "$fail"
