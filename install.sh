@@ -43,8 +43,11 @@ if [ ! -f "${LOCAL_HOOKS_VERSION_FILE}" ] || [ "${LATEST_VERSION}" != "$(cat "${
   curl -sL "${REPO_URL}/archive/refs/tags/${LATEST_VERSION}.zip" -o "${HOOKS_DIR}/hooks.zip"
   unzip -o "${HOOKS_DIR}/hooks.zip" -d "${HOOKS_DIR}"
   mv "${HOOKS_DIR}"/git-hooks-*/hooks/* "${HOOKS_DIR}"
-  for f in "${HOOKS_DIR}"/hooks.zip "${HOOKS_DIR}"/git-hooks-*/{README.md,install.sh}; do rm "${f}"; done
-  rmdir "${HOOKS_DIR}"/git-hooks-*/hooks "${HOOKS_DIR}"/git-hooks-*
+  rm -f "${HOOKS_DIR}"/hooks.zip
+  # Remove the whole extracted tree (hooks/ already moved out). rm -rf, not a
+  # selective rmdir, so a new top-level entry in the zip (e.g. .github/) can't
+  # leave a stray dir behind. HOOKS_DIR is fixed above, glob only matches the extract.
+  rm -rf "${HOOKS_DIR}"/git-hooks-*
   chmod +x "${HOOKS_DIR}"/* 2>/dev/null || true   # ensure hooks stay executable
   echo "${LATEST_VERSION}" > "${LOCAL_HOOKS_VERSION_FILE}"
   echo "Git hooks updated to version ${LATEST_VERSION}."
