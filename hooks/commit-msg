@@ -10,8 +10,9 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib.sh
 . "$DIR/lib.sh"
 
-# falcon-docs is a docs-only repo — exempt from the ticket/#comment convention.
-if is_org_repo && [ "$(remote_repo)" = "falcon-docs" ]; then
+# The docs-only repo is exempt from the ticket/#comment convention. Its actual
+# name is falcon-doc; match falcon-docs too so a rename can't silently re-break this.
+if is_org_repo && [[ "$(remote_repo)" =~ ^falcon-docs?$ ]]; then
   exit 0
 fi
 
